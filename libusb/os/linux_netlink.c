@@ -53,6 +53,8 @@
 #define SOCK_NONBLOCK	0
 #endif
 
+#define ENABLE_LINUX_NETLINK 0
+
 static int linux_netlink_socket = -1;
 static int netlink_control_pipe[2] = { -1, -1 };
 static pthread_t libusb_linux_event_thread;
@@ -61,9 +63,10 @@ static void *linux_netlink_event_thread_main(void *arg);
 
 static int set_fd_cloexec_nb(int fd, int socktype)
 {
+#if ENABLE_LINUX_NETLINK
 	int flags;
 
-#if defined(FD_CLOEXEC)
+//#if defined(FD_CLOEXEC)
 	/* Make sure the netlink socket file descriptor is marked as CLOEXEC */
 	if (!(socktype & SOCK_CLOEXEC)) {
 		flags = fcntl(fd, F_GETFD);
@@ -77,7 +80,7 @@ static int set_fd_cloexec_nb(int fd, int socktype)
 			return -1;
 		}
 	}
-#endif
+//#endif
 
 	/* Make sure the netlink socket is non-blocking */
 	if (!(socktype & SOCK_NONBLOCK)) {
@@ -92,12 +95,15 @@ static int set_fd_cloexec_nb(int fd, int socktype)
 			return -1;
 		}
 	}
+#endif
 
 	return 0;
 }
 
 int linux_netlink_start_event_monitor(void)
 {
+#if ENABLE_LINUX_NETLINK
+
 	struct sockaddr_nl sa_nl = { .nl_family = AF_NETLINK, .nl_groups = NL_GROUP_KERNEL };
 	int socktype = SOCK_RAW | SOCK_NONBLOCK | SOCK_CLOEXEC;
 	int opt = 1;
@@ -154,11 +160,14 @@ err_close_socket:
 	close(linux_netlink_socket);
 	linux_netlink_socket = -1;
 err:
+#endif
 	return LIBUSB_ERROR_OTHER;
 }
 
 int linux_netlink_stop_event_monitor(void)
 {
+#if ENABLE_LINUX_NETLINK
+
 	char dummy = 1;
 	ssize_t r;
 
@@ -180,12 +189,15 @@ int linux_netlink_stop_event_monitor(void)
 	close(netlink_control_pipe[1]);
 	netlink_control_pipe[0] = -1;
 	netlink_control_pipe[1] = -1;
+#endif
 
 	return LIBUSB_SUCCESS;
 }
 
 static const char *netlink_message_parse(const char *buffer, size_t len, const char *key)
 {
+#if ENABLE_LINUX_NETLINK
+
 	const char *end = buffer + len;
 	size_t keylen = strlen(key);
 
@@ -195,6 +207,8 @@ static const char *netlink_message_parse(const char *buffer, size_t len, const c
 		buffer += strlen(buffer) + 1;
 	}
 
+#endif
+
 	return NULL;
 }
 
@@ -202,6 +216,8 @@ static const char *netlink_message_parse(const char *buffer, size_t len, const c
 static int linux_netlink_parse(const char *buffer, size_t len, int *detached,
 	const char **sys_name, uint8_t *busnum, uint8_t *devaddr)
 {
+#if ENABLE_LINUX_NETLINK
+
 	const char *tmp, *slash;
 
 	errno = 0;
@@ -288,12 +304,14 @@ static int linux_netlink_parse(const char *buffer, size_t len, int *detached,
 	if (slash)
 		*sys_name = slash + 1;
 
+#endif
 	/* found a usb device */
 	return 0;
 }
 
 static int linux_netlink_read_message(void)
 {
+#if ENABLE_LINUX_NETLINK
 	char cred_buffer[CMSG_SPACE(sizeof(struct ucred))];
 	char msg_buffer[2048];
 	const char *sys_name = NULL;
@@ -354,11 +372,14 @@ static int linux_netlink_read_message(void)
 	else
 		linux_hotplug_enumerate(busnum, devaddr, sys_name);
 
+#endif
 	return 0;
 }
 
 static void *linux_netlink_event_thread_main(void *arg)
 {
+#if ENABLE_LINUX_NETLINK
+
 	char dummy;
 	int r;
 	ssize_t nb;
@@ -394,11 +415,14 @@ static void *linux_netlink_event_thread_main(void *arg)
 
 	usbi_dbg("netlink event thread exiting");
 
+#endif
+
 	return NULL;
 }
 
 void linux_netlink_hotplug_poll(void)
 {
+#if ENABLE_LINUX_NETLINK
 	int r;
 
 	usbi_mutex_static_lock(&linux_hotplug_lock);
@@ -406,4 +430,5 @@ void linux_netlink_hotplug_poll(void)
 		r = linux_netlink_read_message();
 	} while (r == 0);
 	usbi_mutex_static_unlock(&linux_hotplug_lock);
+#endif
 }
